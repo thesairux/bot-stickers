@@ -1,0 +1,101 @@
+import makeWASocket, {
+  Browsers,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  useMultiFileAuthState,
+} from 'baileys';
+import { rm } from 'node:fs/promises';
+import pino from 'pino';
+import qrcode from 'qrcode-terminal';
+import { config } from './config.js';
+import { createHandler } from './handler.js';
+
+const logger = pino({ level: config.logLevel });
+
+let sock;
+let reconnectDelay = 2_000;
+
+const handleMessage = createHandler({ getSock: () => sock, config });
+
+function printSetupHints() {
+  const me = sock.user;
+  console.log(`[bot] ✅ Conectado como ${me?.name || ''} (${me?.id?.split(':')[0].split('@')[0]})`);
+  const rules = [];
+  if (config.respondInSelfChat) rules.push('tu chat "Mensaje para ti"');
+  if (config.allowEveryone) rules.push('CUALQUIER chat privado');
+  else if (config.allowedNumbers.length) rules.push(`los números: ${config.allowedNumbers.join(', ')}`);
+  if (config.allowedGroups.length) rules.push(`${config.allowedGroups.length} grupo(s)`);
+  console.log(`[bot] Respondo en: ${rules.length ? rules.join(' · ') : '(nadie todavía — revisa tu .env)'}`);
+  console.log('[bot] Mándale una foto, video o enlace de X/Pinterest. Escribe !ayuda para ver opciones.');
+}
+
+export async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
+
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch {
+    // si falla, Baileys usa su versión por defecto
+  }
+
+  sock = makeWASocket({
+    version,
+    logger,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger),
+    },
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  let pairingRequested = false;
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    if (qr && config.pairingNumber) {
+      // Vincular con código de 8 dígitos en vez de QR (útil en servidores).
+      if (!pairingRequested) {
+        pairingRequested = true;
+        try {
+          const code = await sock.requestPairingCode(config.pairingNumber);
+          console.log(`\n[bot] Tu código de vinculación es: ${code}`);
+          console.log('      WhatsApp → Dispositivos vinculados → Vincular con número de teléfono\n');
+        } catch (err) {
+          console.error('[bot] No pude pedir el código de vinculación:', err.message);
+        }
+      }
+    } else if (qr) {
+      console.log('\n[bot] Escanea este QR con WhatsApp → Dispositivos vinculados → Vincular un dispositivo:\n');
+      qrcode.generate(qr, { small: true });
+    }
+
+    if (connection === 'open') {
+      reconnectDelay = 2_000;
+      printSetupHints();
+    }
+
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      if (code === DisconnectReason.loggedOut) {
+        console.warn('[bot] La sesión se cerró desde el teléfono. Borro la sesión guardada; vuelve a iniciar para vincular de nuevo.');
+        await rm(config.authDir, { recursive: true, force: true });
+        process.exit(1);
+      }
+      console.warn(`[bot] Conexión cerrada (código ${code}). Reintentando en ${reconnectDelay / 1000}s…`);
+      setTimeout(() => startBot().catch((err) => console.error('[bot] Error al reconectar:', err)), reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
+    }
+  });
+
+  sock.ev.on('messages.upsert', ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      handleMessage(msg).catch((err) => console.error('[bot] Error inesperado:', err));
+    }
+  });
+}

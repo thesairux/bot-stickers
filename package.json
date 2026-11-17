@@ -1,0 +1,22 @@
+{
+  "name": "bot-stickers",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp que convierte fotos, videos, GIFs y enlaces de X (Twitter) y Pinterest en stickers",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "baileys": "^7.0.0-rc14",
+    "dotenv": "^16.6.1",
+    "node-webpmux": "^3.2.1",
+    "pino": "^9.14.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

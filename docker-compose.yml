@@ -1,0 +1,12 @@
+services:
+  bot-stickers:
+    build: .
+    container_name: bot-stickers
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AUTH_DIR: /app/auth_info
+    volumes:
+      # Aquí se guarda la sesión de WhatsApp para no escanear el QR cada vez
+      - ./auth_info:/app/auth_info
+    tty: true
