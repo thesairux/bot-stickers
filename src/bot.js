@@ -14,9 +14,21 @@ import { describeDisconnect } from './connection.js';
 import { createHandler } from './handler.js';
 import { syncProfilePicture, syncProfileStatus } from './profile.js';
 
-const logger = pino({ level: config.logLevel });
-
 let sock;
+
+// Baileys registra "failed to ack …" mientras el bot aún no está vinculado
+// (todavía no tiene cuenta para responder). Es inofensivo, así que lo ocultamos.
+const logger = pino({
+  level: config.logLevel,
+  hooks: {
+    logMethod(args, method) {
+      const msg = args.find((a) => typeof a === 'string') || '';
+      if (/^failed to ack/.test(msg) && !sock?.authState?.creds?.me) return;
+      method.apply(this, args);
+    },
+  },
+});
+
 let reconnectDelay = 2_000;
 const QR_IMAGE = resolve('qr.png');
 
