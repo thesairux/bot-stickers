@@ -57,6 +57,8 @@ export function loadConfig(env = process.env) {
     authDir: env.AUTH_DIR || 'auth_info',
     // Foto de perfil del bot (vacío = no tocarla)
     profilePicture: env.PROFILE_PICTURE ?? 'assets/profile.jpg',
+    // Descripción ("Info") del perfil del bot (vacío = no tocarla)
+    profileStatus: env.PROFILE_STATUS ?? 'stickers :D made by triton',
     pairingNumber: onlyDigits(env.PAIRING_NUMBER),
 
     // Límites de conversión / descarga

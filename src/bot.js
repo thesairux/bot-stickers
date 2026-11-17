@@ -10,7 +10,7 @@ import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
 import { createHandler } from './handler.js';
-import { syncProfilePicture } from './profile.js';
+import { syncProfilePicture, syncProfileStatus } from './profile.js';
 
 const logger = pino({ level: config.logLevel });
 
@@ -80,6 +80,8 @@ export async function startBot() {
       printSetupHints();
       syncProfilePicture(sock, { path: config.profilePicture, authDir: config.authDir })
         .catch((err) => console.warn('[bot] No pude cambiar la foto de perfil:', err.message));
+      syncProfileStatus(sock, { status: config.profileStatus, authDir: config.authDir })
+        .catch((err) => console.warn('[bot] No pude cambiar la descripción:', err.message));
     }
 
     if (connection === 'close') {

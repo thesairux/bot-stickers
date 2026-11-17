@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { promisify } from 'node:util';
 import { loadConfig } from '../src/config.js';
-import { prepareProfilePicture, syncProfilePicture } from '../src/profile.js';
+import { prepareProfilePicture, syncProfilePicture, syncProfileStatus } from '../src/profile.js';
 
 const run = promisify(execFile);
 let dir;
@@ -89,4 +89,35 @@ test('PROFILE_PICTURE: por defecto usa assets/profile.jpg y vacío la desactiva'
   assert.equal(loadConfig({}).profilePicture, 'assets/profile.jpg');
   assert.equal(loadConfig({ PROFILE_PICTURE: '' }).profilePicture, '');
   assert.equal(loadConfig({ PROFILE_PICTURE: 'otra.png' }).profilePicture, 'otra.png');
+});
+
+test('descripción: se pone una vez y otra vez solo si cambia el texto', async () => {
+  const authDir = await mkdtemp(join(dir, 'auth-status-'));
+  const updates = [];
+  const sock = { updateProfileStatus: async (text) => updates.push(text) };
+
+  assert.equal(await syncProfileStatus(sock, { status: 'stickers :D made by triton', authDir, log: quietLog }), 'updated');
+  assert.deepEqual(updates, ['stickers :D made by triton']);
+
+  assert.equal(await syncProfileStatus(sock, { status: 'stickers :D made by triton', authDir, log: quietLog }), 'unchanged');
+  assert.equal(updates.length, 1);
+
+  assert.equal(await syncProfileStatus(sock, { status: 'otra cosa ✨', authDir, log: quietLog }), 'updated');
+  assert.deepEqual(updates, ['stickers :D made by triton', 'otra cosa ✨']);
+});
+
+test('descripción vacía o demasiado larga → no la toca', async () => {
+  const updates = [];
+  const sock = { updateProfileStatus: async (text) => updates.push(text) };
+  const warnings = [];
+  const log = { log() {}, warn: (m) => warnings.push(m) };
+  assert.equal(await syncProfileStatus(sock, { status: '', authDir: dir, log }), 'disabled');
+  assert.equal(await syncProfileStatus(sock, { status: 'x'.repeat(140), authDir: dir, log }), 'disabled');
+  assert.equal(updates.length, 0);
+  assert.match(warnings[0], /139/);
+});
+
+test('PROFILE_STATUS: por defecto "stickers :D made by triton" y vacío la desactiva', () => {
+  assert.equal(loadConfig({}).profileStatus, 'stickers :D made by triton');
+  assert.equal(loadConfig({ PROFILE_STATUS: '' }).profileStatus, '');
 });

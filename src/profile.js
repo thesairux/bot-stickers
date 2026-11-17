@@ -72,3 +72,31 @@ export async function syncProfilePicture(sock, { path, authDir, log = console })
   log.log('[bot] 🖼️  Foto de perfil actualizada.');
   return 'updated';
 }
+
+/** Máximo de caracteres que WhatsApp permite en la "Info" del perfil. */
+export const MAX_STATUS_LENGTH = 139;
+
+/**
+ * Pone la descripción ("Info") del perfil del bot si cambió desde la última vez.
+ *
+ * @param {{ updateProfileStatus: (status: string) => Promise<void> }} sock
+ * @param {{ status: string, authDir: string, log?: Pick<Console, 'log' | 'warn'> }} opts
+ * @returns {Promise<'updated' | 'unchanged' | 'disabled'>}
+ */
+export async function syncProfileStatus(sock, { status, authDir, log = console }) {
+  const text = (status || '').trim();
+  if (!text) return 'disabled';
+  if ([...text].length > MAX_STATUS_LENGTH) {
+    log.warn(`[bot] La descripción tiene más de ${MAX_STATUS_LENGTH} caracteres; WhatsApp no la acepta. Acórtala en PROFILE_STATUS.`);
+    return 'disabled';
+  }
+
+  const stateFile = join(authDir, 'profile-status.txt');
+  const previous = await readFile(stateFile, 'utf8').catch(() => null);
+  if (previous === text) return 'unchanged';
+
+  await sock.updateProfileStatus(text);
+  await writeFile(stateFile, text);
+  log.log(`[bot] 📝 Descripción actualizada: "${text}"`);
+  return 'updated';
+}
