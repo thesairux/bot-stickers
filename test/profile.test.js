@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { promisify } from 'node:util';
 import { loadConfig } from '../src/config.js';
-import { prepareProfilePicture, syncProfilePicture, syncProfileStatus } from '../src/profile.js';
+import { cleanJpeg, prepareProfilePicture, syncProfilePicture, syncProfileStatus } from '../src/profile.js';
 
 const run = promisify(execFile);
 let dir;
@@ -120,4 +120,53 @@ test('descripción vacía o demasiado larga → no la toca', async () => {
 test('PROFILE_STATUS: por defecto "stickers :D made by triton" y vacío la desactiva', () => {
   assert.equal(loadConfig({}).profileStatus, 'stickers :D made by triton');
   assert.equal(loadConfig({ PROFILE_STATUS: '' }).profileStatus, '');
+});
+
+/** Lista los marcadores de un JPEG hasta los datos de imagen (SOS). */
+function markers(jpeg) {
+  const list = [];
+  let i = 2;
+  while (jpeg[i] === 0xff && jpeg[i + 1] !== 0xda) {
+    list.push(jpeg[i + 1]);
+    i += 2 + jpeg.readUInt16BE(i + 2);
+  }
+  return list;
+}
+
+test('cleanJpeg quita EXIF, perfil de color y comentarios sin dañar la imagen', async () => {
+  const src = await makeImage('clean-src.jpg', '64x64', 'yellow');
+  const original = await readFile(src);
+  const segment = (marker, payload) => {
+    const head = Buffer.from([0xff, marker, 0, 0]);
+    head.writeUInt16BE(payload.length + 2, 2);
+    return Buffer.concat([head, payload]);
+  };
+  // SOI + APP1(EXIF) + APP2(ICC) + COM + resto del JPEG original
+  const dirty = Buffer.concat([
+    original.subarray(0, 2),
+    segment(0xe1, Buffer.from('Exif\0\0GPS-secreto')),
+    segment(0xe2, Buffer.from('ICC_PROFILE\0Display P3')),
+    segment(0xfe, Buffer.from('Lavc60')),
+    original.subarray(2),
+  ]);
+  assert.ok(markers(dirty).includes(0xe1));
+
+  const clean = cleanJpeg(dirty);
+  for (const m of markers(clean)) {
+    assert.ok(!(m >= 0xe1 && m <= 0xef) && m !== 0xfe, `quedó el marcador 0x${m.toString(16)}`);
+  }
+  assert.ok(!clean.includes(Buffer.from('GPS-secreto')));
+  assert.equal(await dimensions(clean), 'mjpeg,64,64');
+  assert.throws(() => cleanJpeg(Buffer.from('no soy jpeg')), /no es un JPEG/);
+});
+
+test('la foto que se sube es un JPEG básico sin metadatos', async () => {
+  const jpeg = await prepareProfilePicture('assets/profile.jpg');
+  assert.deepEqual(
+    markers(jpeg).filter((m) => (m >= 0xe1 && m <= 0xef) || m === 0xfe),
+    [],
+  );
+  assert.ok(markers(jpeg).includes(0xc0), 'debe ser JPEG baseline (SOF0)');
+  assert.equal(jpeg[jpeg.length - 2], 0xff);
+  assert.equal(jpeg[jpeg.length - 1], 0xd9);
 });
