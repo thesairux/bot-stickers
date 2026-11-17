@@ -6,3 +6,4 @@ auth_info/
 *.log
 tmp/
 .DS_Store
+qr.png

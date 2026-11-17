@@ -170,6 +170,10 @@ borre (para `auth_info/`). Sirve:
 - **Un enlace de X o Pinterest falla**: actualiza `yt-dlp` (`pip install -U yt-dlp`);
   esos sitios cambian seguido. Los posts privados o con restricción de edad no se pueden
   descargar.
+- **Sale "QR expiró" o "código 408"**: el QR dura ~1 minuto; si no alcanzas, aparece uno
+  nuevo solo. Si la terminal lo muestra deformado, abre la imagen `qr.png` que se crea en la
+  carpeta del bot, o usa `PAIRING_NUMBER` para vincular con código. Si dice *"no se pudo
+  establecer la conexión"*, revisa tu internet (VPN, wifi del colegio/trabajo, antivirus).
 - **Se desvinculó**: si cierras la sesión desde el teléfono el bot borra `auth_info/` y se
   apaga; vuelve a iniciarlo para escanear un QR nuevo.
 
@@ -183,6 +187,7 @@ npm test
 src/
 ├── index.js          # punto de entrada
 ├── bot.js            # conexión a WhatsApp (QR / código, reconexión)
+├── connection.js     # explica por qué se cortó la conexión
 ├── handler.js        # qué hacer con cada mensaje
 ├── access.js         # quién puede usar el bot
 ├── messages.js       # leer texto, medios, citas y comandos

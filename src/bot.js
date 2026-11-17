@@ -1,14 +1,16 @@
 import makeWASocket, {
   Browsers,
-  DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
 } from 'baileys';
 import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import pino from 'pino';
+import QRCode from 'qrcode';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
+import { describeDisconnect } from './connection.js';
 import { createHandler } from './handler.js';
 import { syncProfilePicture, syncProfileStatus } from './profile.js';
 
@@ -16,6 +18,7 @@ const logger = pino({ level: config.logLevel });
 
 let sock;
 let reconnectDelay = 2_000;
+const QR_IMAGE = resolve('qr.png');
 
 const handleMessage = createHandler({ getSock: () => sock, config });
 
@@ -73,10 +76,16 @@ export async function startBot() {
     } else if (qr) {
       console.log('\n[bot] Escanea este QR con WhatsApp → Dispositivos vinculados → Vincular un dispositivo:\n');
       qrcode.generate(qr, { small: true });
+      // Copia en imagen por si el de la terminal se ve deformado.
+      QRCode.toFile(QR_IMAGE, qr, { width: 400, margin: 2 })
+        .then(() => console.log(`[bot] ¿No se deja escanear? Abre la imagen: ${QR_IMAGE}`))
+        .catch(() => {});
+      console.log('[bot] El QR cambia cada ~20-60 s; si expira aparece uno nuevo solo.\n');
     }
 
     if (connection === 'open') {
       reconnectDelay = 2_000;
+      rm(QR_IMAGE, { force: true }).catch(() => {});
       printSetupHints();
       syncProfilePicture(sock, { path: config.profilePicture, authDir: config.authDir })
         .catch((err) => console.warn('[bot] No pude cambiar la foto de perfil:', err.message));
@@ -85,15 +94,20 @@ export async function startBot() {
     }
 
     if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      if (code === DisconnectReason.loggedOut) {
-        console.warn('[bot] La sesión se cerró desde el teléfono. Borro la sesión guardada; vuelve a iniciar para vincular de nuevo.');
+      const info = describeDisconnect(lastDisconnect?.error);
+      console.warn(`[bot] ${info.message}`);
+      if (info.wipeSession) {
         await rm(config.authDir, { recursive: true, force: true });
+      }
+      if (!info.reconnect) {
         process.exit(1);
       }
-      console.warn(`[bot] Conexión cerrada (código ${code}). Reintentando en ${reconnectDelay / 1000}s…`);
-      setTimeout(() => startBot().catch((err) => console.error('[bot] Error al reconectar:', err)), reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
+      const delay = info.quickRetry ? 1_000 : reconnectDelay;
+      if (!info.quickRetry) {
+        console.warn(`[bot] Reintentando en ${delay / 1000}s…`);
+        reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
+      }
+      setTimeout(() => startBot().catch((err) => console.error('[bot] Error al reconectar:', err)), delay);
     }
   });
 
