@@ -58,6 +58,10 @@ La primera vez aparece un **código QR** en la terminal. En tu teléfono abre
 WhatsApp → **Dispositivos vinculados** → **Vincular un dispositivo** y escanéalo.
 La sesión se guarda en la carpeta `auth_info/`, así que no tendrás que volver a escanear.
 
+Al conectarse, el bot se pone como **foto de perfil** la imagen `assets/profile.jpg` 🐱
+(solo la primera vez o cuando cambias la imagen). Para usar otra, reemplaza ese archivo o
+cambia `PROFILE_PICTURE` en `.env`; se recorta al centro en cuadrado automáticamente.
+
 > ¿No puedes escanear el QR (por ejemplo, en un servidor)? Pon el número en
 > `PAIRING_NUMBER=5215512345678` dentro de `.env` y el bot te dará un **código de 8 dígitos**
 > para usar en *Vincular con número de teléfono*.
@@ -71,6 +75,9 @@ Vincula el bot con **tu** WhatsApp y mándale las fotos/enlaces a tu chat
 
 El bot **nunca** convierte lo que mandas a otras personas: solo reacciona en tu chat
 personal (y en los grupos que tú autorices).
+
+> ⚠️ En esta opción el bot **es** tu cuenta, así que la foto de perfil del bot sería la tuya.
+> Si no quieres que la cambie, pon `PROFILE_PICTURE=` (vacío) en `.env`.
 
 ### Opción B — En un número aparte (recomendado si lo compartirás)
 
@@ -121,6 +128,7 @@ Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ 
 | `ALLOWED_GROUPS`           | *(vacío)*       | IDs de grupos donde funciona |
 | `ALLOW_EVERYONE`           | `false`         | Responder a cualquier chat privado |
 | `PAIRING_NUMBER`           | *(vacío)*       | Vincular con código en vez de QR |
+| `PROFILE_PICTURE`          | `assets/profile.jpg` | Foto de perfil del bot (vacío = no cambiarla) |
 | `MAX_VIDEO_SECONDS`        | `8`             | Duración máxima del sticker animado |
 | `MAX_DOWNLOAD_MB`          | `60`            | Tamaño máximo de archivo a descargar |
 | `MAX_STICKERS_PER_MESSAGE` | `6`             | Máximo de stickers por mensaje/enlace |
@@ -178,6 +186,7 @@ src/
 ├── sticker.js        # ffmpeg → WebP 512×512 + metadatos
 ├── download.js       # descargas con límite, HLS y yt-dlp
 ├── limiter.js        # límite de conversiones simultáneas
+├── profile.js        # foto de perfil del bot
 └── sources/
     ├── twitter.js    # X / Twitter
     └── pinterest.js  # Pinterest

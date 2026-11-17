@@ -55,6 +55,8 @@ export function loadConfig(env = process.env) {
 
     // Conexión
     authDir: env.AUTH_DIR || 'auth_info',
+    // Foto de perfil del bot (vacío = no tocarla)
+    profilePicture: env.PROFILE_PICTURE ?? 'assets/profile.jpg',
     pairingNumber: onlyDigits(env.PAIRING_NUMBER),
 
     // Límites de conversión / descarga
