@@ -95,8 +95,8 @@ escriba el bot muestra su número en la consola para que lo copies.
 
 **¿Bot público?** Si el número es solo del bot, pon `ALLOW_EVERYONE=true`: a **cualquiera**
 que le mande una foto, video o enlace le devuelve el sticker, y a quien solo escriba texto
-("hola") le explica una vez qué mandar. Para evitar abusos, cada persona fuera de
-`ALLOWED_NUMBERS` puede pedir como máximo `PUBLIC_RATE_LIMIT` stickers por minuto.
+("hola") le explica una vez qué mandar. Si algún día quieres poner un tope por persona,
+usa `PUBLIC_RATE_LIMIT` (stickers por minuto; `0` = sin límite).
 
 ### Grupos (opcional)
 
@@ -131,8 +131,7 @@ Hay dos formas de pedir stickers:
 
 También sirven con `!` o `/` (`!sticker`, `/s`…) y la forma corta `.s`. Tú puedes usar
 `.sticker` en cualquier chat (por ejemplo, respondiendo a una foto que te mandó un amigo).
-Para evitar abusos, cada persona que no está en tus listas puede pedir como máximo
-`PUBLIC_RATE_LIMIT` stickers por minuto.
+Si quieres un tope por persona, usa `PUBLIC_RATE_LIMIT` (por defecto no hay límite).
 
 Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ (y te dice por qué).
 
@@ -147,7 +146,7 @@ Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ 
 | `ALLOWED_GROUPS`           | *(vacío)*       | IDs de grupos donde funciona |
 | `ALLOW_EVERYONE`           | `false`         | Bot público: convierte lo que cualquiera le mande en privado, sin comando |
 | `PUBLIC_COMMANDS`          | `true`          | Cualquiera puede pedir stickers con `.sticker` (privado o grupos) |
-| `PUBLIC_RATE_LIMIT`        | `5`             | Máximo de stickers por minuto por persona fuera de `ALLOWED_NUMBERS` |
+| `PUBLIC_RATE_LIMIT`        | `0`             | Máximo de stickers por minuto por persona fuera de `ALLOWED_NUMBERS` (`0` = sin límite) |
 | `LOG_MESSAGES`             | `true`          | Mostrar en la consola qué recibe el bot y qué hace |
 | `PAIRING_NUMBER`           | *(vacío)*       | Vincular con código en vez de QR |
 | `PROFILE_PICTURE`          | `assets/profile.jpg` | Foto de perfil del bot (vacío = no cambiarla) |

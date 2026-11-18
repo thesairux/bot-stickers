@@ -121,7 +121,7 @@ export function createHandler(deps) {
   const sentByBot = new RecentSet();
   const warnedChats = new RecentSet(200);
   const warnedStubs = new RecentSet(200);
-  const publicLimiter = createRateLimiter(config.publicRateLimit ?? 5, 60_000);
+  const publicLimiter = config.publicRateLimit > 0 ? createRateLimiter(config.publicRateLimit, 60_000) : null;
   const greetedChats = new RecentSet(5000);
   const note = (text) => {
     if (config.logMessages !== false) log.log(`[bot] ${text}`);
@@ -318,8 +318,8 @@ export function createHandler(deps) {
       return;
     }
 
-    // Límite por persona para quien no está en tus listas (ALLOW_EVERYONE o .sticker público).
-    if (isPublic || access.everyone) {
+    // Límite opcional por persona (PUBLIC_RATE_LIMIT > 0) para quien no está en tus listas.
+    if (publicLimiter && (isPublic || access.everyone)) {
       const who = access.phone || (await senderPhone(msg.key, sock)) || msg.key.participant || chat;
       const verdict = publicLimiter.take(who);
       if (verdict !== 'ok') {

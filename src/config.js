@@ -53,8 +53,8 @@ export function loadConfig(env = process.env) {
     allowEveryone: parseBool(env.ALLOW_EVERYONE, false),
     // Cualquiera puede pedir stickers escribiendo .sticker (en privado o en grupos)
     publicCommands: parseBool(env.PUBLIC_COMMANDS, true),
-    // Máximo de stickers por minuto para cada persona que no está en tus listas
-    publicRateLimit: parseNumber(env.PUBLIC_RATE_LIMIT, 5, 1),
+    // Máximo de stickers por minuto por persona fuera de tus listas (0 = sin límite)
+    publicRateLimit: parseNumber(env.PUBLIC_RATE_LIMIT, 0, 0),
     respondInSelfChat: parseBool(env.RESPOND_IN_SELF_CHAT, true),
 
     // Conexión

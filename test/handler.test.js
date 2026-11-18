@@ -471,3 +471,11 @@ test('ALLOW_EVERYONE: límite por persona; los de ALLOWED_NUMBERS no tienen lím
   for (let i = 0; i < 4; i += 1) await t.handle(msg({ chat: '56900001111@s.whatsapp.net', fromMe: false, message: image() }));
   assert.equal(t.stickers().length, 6);
 });
+
+test('por defecto no hay límite de stickers por persona', async () => {
+  assert.equal(loadConfig({}).publicRateLimit, 0);
+  const t = setup({ ALLOW_EVERYONE: 'true' });
+  for (let i = 0; i < 15; i += 1) await t.handle(msg({ chat: STRANGER, fromMe: false, message: image() }));
+  assert.equal(t.stickers().length, 15);
+  assert.equal(t.texts().filter((x) => x.includes('Vas muy rápido')).length, 0);
+});
