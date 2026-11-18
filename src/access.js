@@ -89,7 +89,10 @@ export async function checkAccess(msg, sock, config) {
   }
 
   const phone = await senderPhone(msg.key, sock);
-  if (config.allowEveryone) return { allowed: true, phone };
+  if (config.allowEveryone) {
+    // "everyone": entró solo por ALLOW_EVERYONE (no está en tu lista) → se le aplica el límite.
+    return { allowed: true, phone, everyone: !isAllowedNumber(phone, config) };
+  }
   return { allowed: isAllowedNumber(phone, config), phone };
 }
 

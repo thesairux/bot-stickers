@@ -92,7 +92,11 @@ ALLOWED_NUMBERS=5215512345678
 
 Puedes poner varios separados por comas. Si se te olvida, cuando alguien no autorizado le
 escriba el bot muestra su número en la consola para que lo copies.
-Con `ALLOW_EVERYONE=true` le responde a cualquiera (bot público).
+
+**¿Bot público?** Si el número es solo del bot, pon `ALLOW_EVERYONE=true`: a **cualquiera**
+que le mande una foto, video o enlace le devuelve el sticker, y a quien solo escriba texto
+("hola") le explica una vez qué mandar. Para evitar abusos, cada persona fuera de
+`ALLOWED_NUMBERS` puede pedir como máximo `PUBLIC_RATE_LIMIT` stickers por minuto.
 
 ### Grupos (opcional)
 
@@ -141,9 +145,9 @@ Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ 
 | `RESPOND_IN_SELF_CHAT`     | `true`          | Responder en tu chat "Mensaje para ti" |
 | `ALLOWED_NUMBERS`          | *(vacío)*       | Números que pueden usar el bot por privado |
 | `ALLOWED_GROUPS`           | *(vacío)*       | IDs de grupos donde funciona |
-| `ALLOW_EVERYONE`           | `false`         | Convertir todo lo que llegue a cualquier chat privado, sin comando |
+| `ALLOW_EVERYONE`           | `false`         | Bot público: convierte lo que cualquiera le mande en privado, sin comando |
 | `PUBLIC_COMMANDS`          | `true`          | Cualquiera puede pedir stickers con `.sticker` (privado o grupos) |
-| `PUBLIC_RATE_LIMIT`        | `5`             | Máximo de `.sticker` por minuto por persona (fuera de tus listas) |
+| `PUBLIC_RATE_LIMIT`        | `5`             | Máximo de stickers por minuto por persona fuera de `ALLOWED_NUMBERS` |
 | `LOG_MESSAGES`             | `true`          | Mostrar en la consola qué recibe el bot y qué hace |
 | `PAIRING_NUMBER`           | *(vacío)*       | Vincular con código en vez de QR |
 | `PROFILE_PICTURE`          | `assets/profile.jpg` | Foto de perfil del bot (vacío = no cambiarla) |

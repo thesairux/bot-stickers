@@ -38,7 +38,27 @@ function describeInput(content, text, command) {
   return null;
 }
 
-export function helpText(config) {
+/**
+ * Texto de ayuda.
+ * @param {ReturnType<typeof import('./config.js').loadConfig>} config
+ * @param {{ auto?: boolean }} [opts]  auto = en este chat convierte sin comando
+ */
+export function helpText(config, { auto = false } = {}) {
+  if (auto) {
+    const lines = [
+      '🤖 *Bot de Stickers*',
+      '',
+      'Mándame cualquiera de estas cosas y te devuelvo el sticker:',
+      '• 📷 Una foto',
+      `• 🎥 Un video o GIF (se usan los primeros ${config.maxVideoSeconds} s)`,
+      '• 🐦 Un enlace de X / Twitter',
+      '• 📌 Un enlace de Pinterest',
+      '',
+      '✂️ Escribe *recortar* junto a la foto o el enlace para que el sticker llene todo el cuadrado.',
+    ];
+    if (config.publicCommands) lines.push('👥 En grupos: responde *.sticker* a una foto, video o enlace.');
+    return lines.join('\n');
+  }
   return [
     '🤖 *Bot de Stickers*',
     '',
@@ -102,6 +122,7 @@ export function createHandler(deps) {
   const warnedChats = new RecentSet(200);
   const warnedStubs = new RecentSet(200);
   const publicLimiter = createRateLimiter(config.publicRateLimit ?? 5, 60_000);
+  const greetedChats = new RecentSet(5000);
   const note = (text) => {
     if (config.logMessages !== false) log.log(`[bot] ${text}`);
   };
@@ -273,7 +294,32 @@ export function createHandler(deps) {
       return;
     }
 
-    if (isPublic && command === 'sticker') {
+    if (what) {
+      const where = isSelfChat(chat, sock.user)
+        ? 'en tu chat "Mensaje para ti"'
+        : isJidGroup(chat) ? `en el grupo ${chat}` : msg.key.fromMe ? `tuyo en ${chat}` : `de ${access.phone || chat}`;
+      note(`📩 Recibí ${what} ${where}.`);
+    }
+
+    if (command === 'help') {
+      await send(chat, { text: helpText(config, { auto: access.allowed }) }, msg);
+      return;
+    }
+
+    const target = resolveTarget(msg, content, text, command);
+    if (!target) {
+      if (command === 'sticker') {
+        await send(chat, { text: 'Responde *.sticker* a una foto, video o enlace, o mándalos con *.sticker* en el texto.' }, msg);
+      } else if (access.allowed && text && !msg.key.fromMe && !isJidGroup(chat) && !greetedChats.has(chat)) {
+        // Alguien escribió "hola" (u otro texto): le explicamos una vez qué mandar.
+        greetedChats.add(chat);
+        await send(chat, { text: helpText(config, { auto: true }) }, msg);
+      }
+      return;
+    }
+
+    // Límite por persona para quien no está en tus listas (ALLOW_EVERYONE o .sticker público).
+    if (isPublic || access.everyone) {
       const who = access.phone || (await senderPhone(msg.key, sock)) || msg.key.participant || chat;
       const verdict = publicLimiter.take(who);
       if (verdict !== 'ok') {
@@ -283,26 +329,6 @@ export function createHandler(deps) {
         }
         return;
       }
-    }
-
-    if (what) {
-      const where = isSelfChat(chat, sock.user)
-        ? 'en tu chat "Mensaje para ti"'
-        : isJidGroup(chat) ? `en el grupo ${chat}` : msg.key.fromMe ? `tuyo en ${chat}` : `de ${access.phone || chat}`;
-      note(`📩 Recibí ${what} ${where}.`);
-    }
-
-    if (command === 'help') {
-      await send(chat, { text: helpText(config) }, msg);
-      return;
-    }
-
-    const target = resolveTarget(msg, content, text, command);
-    if (!target) {
-      if (command === 'sticker') {
-        await send(chat, { text: 'Responde *.sticker* a una foto, video o enlace, o mándalos con *.sticker* en el texto.' }, msg);
-      }
-      return;
     }
 
     await react(chat, msg.key, '⏳');

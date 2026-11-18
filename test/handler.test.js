@@ -435,3 +435,39 @@ test('límite por persona: si pide demasiados seguidos, avisa una vez y espera',
   for (let i = 0; i < 4; i += 1) await t.handle(msg({ message: image() }));
   assert.equal(t.stickers().length, 7);
 });
+
+// ---------- Número solo para el bot (ALLOW_EVERYONE=true) ----------
+
+test('ALLOW_EVERYONE: cualquiera que mande foto, video o enlace recibe el sticker sin comando', async () => {
+  const t = setup({ ALLOW_EVERYONE: 'true' });
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: image() }));
+  await t.handle(msg({ chat: '56955556666@s.whatsapp.net', fromMe: false, message: video() }));
+  await t.handle(msg({ chat: '77@lid', remoteJidAlt: '56977778888@s.whatsapp.net', fromMe: false, message: text('https://x.com/a/status/1') }));
+  assert.equal(t.stickers().length, 1 + 1 + 2);
+});
+
+test('ALLOW_EVERYONE: a quien escribe "hola" le explica una sola vez qué mandar', async () => {
+  const t = setup({ ALLOW_EVERYONE: 'true' });
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: text('hola') }));
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: text('holaa??') }));
+  assert.equal(t.texts().length, 1);
+  assert.match(t.texts()[0], /Mándame cualquiera de estas cosas/);
+  assert.doesNotMatch(t.texts()[0], /\.id/);
+});
+
+test('sin ALLOW_EVERYONE no le contesta "hola" a desconocidos, ni a ti en tu chat', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: text('hola') }));
+  await t.handle(msg({ message: text('nota para mí') }));
+  assert.equal(t.sock.sent.length, 0);
+});
+
+test('ALLOW_EVERYONE: límite por persona; los de ALLOWED_NUMBERS no tienen límite', async () => {
+  const t = setup({ ALLOW_EVERYONE: 'true', PUBLIC_RATE_LIMIT: '2', ALLOWED_NUMBERS: '56900001111' });
+  for (let i = 0; i < 4; i += 1) await t.handle(msg({ chat: STRANGER, fromMe: false, message: image() }));
+  assert.equal(t.stickers().length, 2);
+  assert.equal(t.texts().filter((x) => x.includes('Vas muy rápido')).length, 1);
+
+  for (let i = 0; i < 4; i += 1) await t.handle(msg({ chat: '56900001111@s.whatsapp.net', fromMe: false, message: image() }));
+  assert.equal(t.stickers().length, 6);
+});
