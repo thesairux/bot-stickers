@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkAccess, isSelfChat, samePhone, senderPhone } from '../src/access.js';
 import { loadConfig } from '../src/config.js';
-import { createHandler } from '../src/handler.js';
+import { createHandler, shouldHandleUpsert } from '../src/handler.js';
 import { getMediaInfo, parseCommand, unwrap } from '../src/messages.js';
 
 const ME = { id: '5215511112222:7@s.whatsapp.net', lid: '99887766:7@lid', name: 'Yo' };
@@ -287,4 +287,59 @@ test('si algo falla reacciona con ❌ y explica el error', async () => {
   await t.handle(msg({ message: image() }));
   assert.deepEqual(t.reactions(), ['⏳', '❌']);
   assert.match(t.texts()[0], /No pude crear el sticker: falló la descarga/);
+});
+
+// ---------- Diagnóstico y reconexión ----------
+
+test('procesa mensajes "append" recientes (mandados mientras el bot se conectaba), no el historial viejo', () => {
+  const now = 1_800_000_000;
+  assert.equal(shouldHandleUpsert('notify', {}, now), true);
+  assert.equal(shouldHandleUpsert('append', { messageTimestamp: now - 30 }, now), true);
+  assert.equal(shouldHandleUpsert('append', { messageTimestamp: { toNumber: () => now - 60 } }, now), true);
+  assert.equal(shouldHandleUpsert('append', { messageTimestamp: now - 3600 }, now), false);
+  assert.equal(shouldHandleUpsert('append', {}, now), false);
+  assert.equal(shouldHandleUpsert('other', { messageTimestamp: now }, now), false);
+});
+
+test('la consola cuenta qué recibió y qué hizo', async () => {
+  const t = setup();
+  await t.handle(msg({ message: image() }));
+  assert.ok(t.logs.some((l) => l.includes('Recibí una foto en tu chat "Mensaje para ti"')), t.logs.join('\n'));
+  assert.ok(t.logs.some((l) => l.includes('Listo: envié 1 sticker')));
+});
+
+test('la consola explica por qué ignoró una foto tuya enviada a otro chat', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: '5215533334444@s.whatsapp.net', fromMe: true, message: image() }));
+  assert.equal(t.sock.sent.length, 0);
+  assert.ok(t.logs.some((l) => l.includes('Ignoré una foto que mandaste a otro chat (5215533334444@s.whatsapp.net)')));
+});
+
+test('avisa si un mensaje tuyo llegó sin poder descifrarse', async () => {
+  const t = setup();
+  await t.handle({ key: { remoteJid: SELF_CHAT, fromMe: true, id: 'X1' }, messageStubType: 2, messageStubParameters: ['No session'] });
+  assert.equal(t.sock.sent.length, 0);
+  assert.ok(t.logs.some((l) => l.includes('todavía no puedo leer')));
+});
+
+test('LOG_MESSAGES=false no llena la consola', async () => {
+  const t = setup({ LOG_MESSAGES: 'false' });
+  await t.handle(msg({ message: image() }));
+  assert.equal(t.stickers().length, 1);
+  assert.deepEqual(t.logs, []);
+});
+
+test('si WhatsApp le devuelve al bot su propio mensaje, lo reconoce por el ID y no se responde', async () => {
+  const t = setup();
+  const ids = [];
+  const original = t.sock.sendMessage.bind(t.sock);
+  t.sock.sendMessage = async (jid, content, opts) => {
+    ids.push(opts?.messageId);
+    // Eco inmediato, antes de que sendMessage termine (como "append" de Baileys)
+    await t.handle({ key: { remoteJid: jid, fromMe: true, id: opts?.messageId }, message: image() });
+    return original(jid, content, opts);
+  };
+  await t.handle(msg({ message: image() }));
+  assert.ok(ids.every(Boolean), 'cada envío lleva un messageId');
+  assert.equal(t.stickers().length, 1, 'solo el sticker de la foto original');
 });

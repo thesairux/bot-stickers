@@ -69,6 +69,8 @@ export function loadConfig(env = process.env) {
 
     ytdlpPath: env.YTDLP_PATH || 'yt-dlp',
     logLevel: env.LOG_LEVEL || 'warn',
+    // Mostrar en la consola qué mensajes recibe y por qué ignora alguno
+    logMessages: parseBool(env.LOG_MESSAGES, true),
   };
 }
 

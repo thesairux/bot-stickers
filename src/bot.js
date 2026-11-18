@@ -11,7 +11,7 @@ import QRCode from 'qrcode';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
 import { describeDisconnect } from './connection.js';
-import { createHandler } from './handler.js';
+import { createHandler, shouldHandleUpsert } from './handler.js';
 import { syncProfilePicture, syncProfileStatus } from './profile.js';
 
 let sock;
@@ -36,7 +36,9 @@ const handleMessage = createHandler({ getSock: () => sock, config });
 
 function printSetupHints() {
   const me = sock.user;
-  console.log(`[bot] ✅ Conectado como ${me?.name || ''} (${me?.id?.split(':')[0].split('@')[0]})`);
+  const phone = me?.id?.split(':')[0].split('@')[0];
+  const lid = me?.lid?.split(':')[0].split('@')[0];
+  console.log(`[bot] ✅ Conectado como ${me?.name ? `${me.name} ` : ''}(${phone}${lid ? ` · LID ${lid}` : ''})`);
   const rules = [];
   if (config.respondInSelfChat) rules.push('tu chat "Mensaje para ti"');
   if (config.allowEveryone) rules.push('CUALQUIER chat privado');
@@ -124,8 +126,8 @@ export async function startBot() {
   });
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
-    if (type !== 'notify') return;
     for (const msg of messages) {
+      if (!shouldHandleUpsert(type, msg)) continue;
       handleMessage(msg).catch((err) => console.error('[bot] Error inesperado:', err));
     }
   });

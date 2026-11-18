@@ -1,12 +1,42 @@
-import { downloadMediaMessage } from 'baileys';
+import { downloadMediaMessage, generateMessageIDV2, isJidGroup, proto } from 'baileys';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkAccess, isAllowedNumber, senderPhone } from './access.js';
+import { checkAccess, isAllowedNumber, isSelfChat, senderPhone } from './access.js';
 import { createLimiter } from './limiter.js';
 import { getMediaInfo, getQuotedMessage, getText, parseCommand, unwrap } from './messages.js';
 import { fetchLinkMedia, findLink } from './sources/index.js';
 import { convertToSticker } from './sticker.js';
+
+/** Mensajes "append" más viejos que esto se ignoran (no procesar historial). */
+const MAX_APPEND_AGE_SECONDS = 10 * 60;
+
+/**
+ * ¿Hay que procesar este evento messages.upsert?
+ * - "notify": mensajes nuevos en tiempo real → sí.
+ * - "append": llegan así los mensajes que mandaste mientras el bot se
+ *   conectaba; se procesan solo si son recientes.
+ * @param {string} type
+ * @param {{ messageTimestamp?: any }} msg
+ * @param {number} [nowSeconds]
+ */
+export function shouldHandleUpsert(type, msg, nowSeconds = Date.now() / 1000) {
+  if (type === 'notify') return true;
+  if (type !== 'append') return false;
+  const ts = toNumber(msg?.messageTimestamp);
+  return ts > 0 && nowSeconds - ts <= MAX_APPEND_AGE_SECONDS;
+}
+
+/** Describe lo que llegó, para los mensajes de la consola. */
+function describeInput(content, text, command) {
+  if (content.imageMessage) return 'una foto';
+  if (content.videoMessage) return content.videoMessage.gifPlayback ? 'un GIF' : 'un video';
+  if (getMediaInfo(content)) return 'un archivo';
+  if (command) return `el comando ${text.split(/\s+/)[0]}`;
+  const link = findLink(text);
+  if (link) return `un enlace de ${link.platform === 'twitter' ? 'X' : 'Pinterest'}`;
+  return null;
+}
 
 export function helpText(config) {
   return [
@@ -71,16 +101,27 @@ export function createHandler(deps) {
   const limit = createLimiter(config.concurrency);
   const sentByBot = new RecentSet();
   const warnedChats = new RecentSet(200);
+  const warnedStubs = new RecentSet(200);
+  const note = (text) => {
+    if (config.logMessages !== false) log.log(`[bot] ${text}`);
+  };
 
+  /**
+   * Envía un mensaje anotando su ID ANTES de mandarlo, para reconocerlo
+   * si WhatsApp nos lo devuelve y no responderle al propio bot.
+   */
   async function send(chat, content, quoted) {
-    const sent = await getSock().sendMessage(chat, content, quoted ? { quoted } : undefined);
+    const sock = getSock();
+    const messageId = generateMessageIDV2(sock.user?.id);
+    sentByBot.add(messageId);
+    const sent = await sock.sendMessage(chat, content, { messageId, ...(quoted ? { quoted } : {}) });
     sentByBot.add(sent?.key?.id);
     return sent;
   }
 
   async function react(chat, key, emoji) {
     try {
-      await getSock().sendMessage(chat, { react: { text: emoji, key } });
+      await send(chat, { react: { text: emoji, key } });
     } catch {
       // las reacciones no son importantes
     }
@@ -163,8 +204,20 @@ export function createHandler(deps) {
    */
   return async function handleMessage(msg) {
     const chat = msg?.key?.remoteJid;
-    if (!chat || !msg.message) return;
+    if (!chat) return;
     if (sentByBot.has(msg.key.id)) return;
+    const sock = getSock();
+
+    if (!msg.message) {
+      // Mensaje que no se pudo descifrar (pasa a veces justo después de vincular).
+      const isCiphertext = msg.messageStubType === proto.WebMessageInfo.StubType.CIPHERTEXT;
+      if (isCiphertext && (msg.key.fromMe || isSelfChat(chat, sock.user)) && !warnedStubs.has(msg.key.id)) {
+        warnedStubs.add(msg.key.id);
+        note('⚠️ Me llegó un mensaje tuyo que todavía no puedo leer (pasa justo después de vincular). ' +
+          'WhatsApp lo reenvía solo; si en unos segundos no hay sticker, mándalo otra vez.');
+      }
+      return;
+    }
 
     const content = unwrap(msg.message);
     if (!content) return;
@@ -172,9 +225,9 @@ export function createHandler(deps) {
 
     const text = getText(content);
     const { command, crop } = parseCommand(text);
-    const sock = getSock();
 
     const access = await checkAccess(msg, sock, config);
+    const what = describeInput(content, text, command);
 
     if (command === 'id') {
       const phone = access.phone ?? (await senderPhone(msg.key, sock));
@@ -190,15 +243,27 @@ export function createHandler(deps) {
     }
 
     if (!access.allowed) {
-      const wouldProcess = command || getMediaInfo(content) || findLink(text);
-      if (wouldProcess && !msg.key.fromMe && !warnedChats.has(chat)) {
+      if (what && !warnedChats.has(chat)) {
         warnedChats.add(chat);
-        log.log(
-          `[bot] Ignoré un mensaje de ${access.phone || chat}. ` +
-            'Si quieres que el bot le responda, agrégalo a ALLOWED_NUMBERS (o el grupo a ALLOWED_GROUPS).',
-        );
+        if (isJidGroup(chat)) {
+          note(`Ignoré ${what} en el grupo ${chat}: no está en ALLOWED_GROUPS (escribe !id ahí para ver su ID).`);
+        } else if (msg.key.fromMe) {
+          note(`Ignoré ${what} que mandaste a otro chat (${chat}). Para stickers usa tu chat "Mensaje para ti".`);
+        } else {
+          log.log(
+            `[bot] Ignoré un mensaje de ${access.phone || chat}. ` +
+              'Si quieres que el bot le responda, agrégalo a ALLOWED_NUMBERS (o el grupo a ALLOWED_GROUPS).',
+          );
+        }
       }
       return;
+    }
+
+    if (what) {
+      const where = isSelfChat(chat, sock.user)
+        ? 'en tu chat "Mensaje para ti"'
+        : isJidGroup(chat) ? `en el grupo ${chat}` : `de ${access.phone || chat}`;
+      note(`📩 Recibí ${what} ${where}.`);
     }
 
     if (command === 'help') {
@@ -216,8 +281,9 @@ export function createHandler(deps) {
 
     await react(chat, msg.key, '⏳');
     try {
-      await limit(() => makeStickers(chat, msg, target, crop ? 'crop' : 'contain'));
+      const count = await limit(() => makeStickers(chat, msg, target, crop ? 'crop' : 'contain'));
       await react(chat, msg.key, '✅');
+      note(`✅ Listo: envié ${count === 1 ? '1 sticker' : `${count} stickers`}.`);
     } catch (err) {
       log.error('[bot] Error creando sticker:', err);
       await react(chat, msg.key, '❌');
@@ -228,8 +294,11 @@ export function createHandler(deps) {
 
 function mediaSize(content) {
   const media = content.imageMessage || content.videoMessage || content.documentMessage;
-  const length = media?.fileLength;
-  if (!length) return 0;
-  // Puede venir como número o como Long de protobuf.
-  return typeof length === 'object' && typeof length.toNumber === 'function' ? length.toNumber() : Number(length);
+  return toNumber(media?.fileLength);
+}
+
+/** Número normal a partir de un número o un Long de protobuf. */
+function toNumber(value) {
+  if (!value) return 0;
+  return typeof value === 'object' && typeof value.toNumber === 'function' ? value.toNumber() : Number(value);
 }
