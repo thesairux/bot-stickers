@@ -79,19 +79,29 @@ export function getQuotedMessage(msg, content) {
   };
 }
 
+/** Prefijos aceptados para los comandos: !sticker, .sticker o /sticker */
+const PREFIXES = ['!', '.', '/'];
+const COMMANDS = {
+  help: ['ayuda', 'help', 'menu', 'start'],
+  id: ['id'],
+  sticker: ['s', 'sticker', 'stiker', 'stk'],
+};
+
 /**
  * Interpreta comandos y opciones del texto.
  * @param {string} text
+ * @returns {{ command: 'help' | 'id' | 'sticker' | null, crop: boolean }}
  */
 export function parseCommand(text) {
   const lower = text.toLowerCase().trim();
   const first = lower.split(/\s+/)[0] || '';
   const crop = /(^|\s)(recortar|recorte|crop|cuadrado)(\s|$)/.test(lower);
 
-  if (['!ayuda', '!help', '!menu', '/ayuda', '/help', '/start'].includes(first)) {
-    return { command: 'help', crop };
+  if (PREFIXES.includes(first[0])) {
+    const word = first.slice(1);
+    for (const [command, words] of Object.entries(COMMANDS)) {
+      if (words.includes(word)) return { command, crop };
+    }
   }
-  if (first === '!id' || first === '/id') return { command: 'id', crop };
-  if (['!s', '!sticker', '/s', '/sticker'].includes(first)) return { command: 'sticker', crop };
   return { command: null, crop };
 }

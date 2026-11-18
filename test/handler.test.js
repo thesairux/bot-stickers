@@ -74,6 +74,13 @@ test('parseCommand reconoce comandos y la opción recortar', () => {
   assert.deepEqual(parseCommand('!S recortar'), { command: 'sticker', crop: true });
   assert.deepEqual(parseCommand('!id'), { command: 'id', crop: false });
   assert.deepEqual(parseCommand('hola Recortar'), { command: null, crop: true });
+  assert.deepEqual(parseCommand('.sticker'), { command: 'sticker', crop: false });
+  assert.deepEqual(parseCommand('.S recortar'), { command: 'sticker', crop: true });
+  assert.deepEqual(parseCommand('/sticker https://x.com/a/status/1'), { command: 'sticker', crop: false });
+  assert.deepEqual(parseCommand('.ayuda'), { command: 'help', crop: false });
+  assert.deepEqual(parseCommand('.id'), { command: 'id', crop: false });
+  assert.deepEqual(parseCommand('...'), { command: null, crop: false });
+  assert.deepEqual(parseCommand('.stickers lindos'), { command: null, crop: false });
   assert.deepEqual(parseCommand('https://x.com/a/status/1'), { command: null, crop: false });
 });
 
@@ -200,7 +207,7 @@ test('"!s" sin nada que convertir explica cómo usarlo', async () => {
   const t = setup();
   await t.handle(msg({ message: text('!s') }));
   assert.equal(t.stickers().length, 0);
-  assert.match(t.texts()[0], /Responde con \*!s\*/);
+  assert.match(t.texts()[0], /Responde \*\.sticker\*/);
 });
 
 test('!ayuda responde con el menú', async () => {
@@ -342,4 +349,89 @@ test('si WhatsApp le devuelve al bot su propio mensaje, lo reconoce por el ID y 
   await t.handle(msg({ message: image() }));
   assert.ok(ids.every(Boolean), 'cada envío lleva un messageId');
   assert.equal(t.stickers().length, 1, 'solo el sticker de la foto original');
+});
+
+// ---------- .sticker para cualquiera ----------
+
+const STRANGER = '56911112222@s.whatsapp.net';
+
+test('un desconocido que manda una foto SIN .sticker no recibe nada', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: image() }));
+  assert.equal(t.sock.sent.length, 0);
+});
+
+test('un desconocido que manda una foto CON ".sticker" recibe su sticker', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: image('.sticker') }));
+  assert.equal(t.stickers().length, 1);
+  assert.deepEqual(t.reactions(), ['⏳', '✅']);
+});
+
+test('".sticker" respondiendo a una foto en cualquier grupo', async () => {
+  const t = setup();
+  await t.handle(msg({
+    chat: '120363000000000555@g.us', fromMe: false, participant: '9@lid',
+    message: {
+      extendedTextMessage: {
+        text: '.sticker',
+        contextInfo: { stanzaId: 'P1', participant: '8@lid', quotedMessage: image() },
+      },
+    },
+  }));
+  assert.equal(t.calls.download[0].key.id, 'P1');
+  assert.equal(t.stickers().length, 1);
+});
+
+test('".sticker <enlace>" de un desconocido convierte el enlace', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: text('.s https://pin.it/AbC12 recortar') }));
+  assert.equal(t.calls.fetchLink[0].link.platform, 'pinterest');
+  assert.equal(t.calls.convert[0].opts.fit, 'crop');
+});
+
+test('".ayuda" de un desconocido responde el menú', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: text('.ayuda') }));
+  assert.match(t.texts()[0], /\.sticker/);
+});
+
+test('tú puedes usar ".sticker" en el chat con un amigo', async () => {
+  const t = setup();
+  await t.handle(msg({
+    chat: '5215533334444@s.whatsapp.net', fromMe: true,
+    message: { extendedTextMessage: { text: '.sticker', contextInfo: { stanzaId: 'F1', quotedMessage: image() } } },
+  }));
+  assert.equal(t.stickers().length, 1);
+  assert.equal(t.stickers()[0].jid, '5215533334444@s.whatsapp.net');
+});
+
+test('PUBLIC_COMMANDS=false: los desconocidos no pueden usar .sticker', async () => {
+  const t = setup({ PUBLIC_COMMANDS: 'false' });
+  await t.handle(msg({ chat: STRANGER, fromMe: false, message: image('.sticker') }));
+  assert.equal(t.sock.sent.length, 0);
+});
+
+test('nunca responde .sticker en estados ni canales', async () => {
+  const t = setup();
+  await t.handle(msg({ chat: 'status@broadcast', fromMe: false, participant: STRANGER, message: image('.sticker') }));
+  await t.handle(msg({ chat: '1203@newsletter', fromMe: false, message: image('.sticker') }));
+  assert.equal(t.sock.sent.length, 0);
+});
+
+test('límite por persona: si pide demasiados seguidos, avisa una vez y espera', async () => {
+  const t = setup({ PUBLIC_RATE_LIMIT: '2' });
+  for (let i = 0; i < 5; i += 1) {
+    await t.handle(msg({ chat: STRANGER, fromMe: false, message: image('.sticker') }));
+  }
+  assert.equal(t.stickers().length, 2);
+  assert.equal(t.texts().filter((x) => x.includes('Vas muy rápido')).length, 1);
+
+  // Otra persona no se ve afectada
+  await t.handle(msg({ chat: '56933334444@s.whatsapp.net', fromMe: false, message: image('.sticker') }));
+  assert.equal(t.stickers().length, 3);
+
+  // Tu chat personal no tiene límite
+  for (let i = 0; i < 4; i += 1) await t.handle(msg({ message: image() }));
+  assert.equal(t.stickers().length, 7);
 });

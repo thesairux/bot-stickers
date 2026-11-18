@@ -2,8 +2,8 @@ import { downloadMediaMessage, generateMessageIDV2, isJidGroup, proto } from 'ba
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkAccess, isAllowedNumber, isSelfChat, senderPhone } from './access.js';
-import { createLimiter } from './limiter.js';
+import { checkAccess, isAllowedNumber, isRegularChat, isSelfChat, senderPhone } from './access.js';
+import { createLimiter, createRateLimiter } from './limiter.js';
 import { getMediaInfo, getQuotedMessage, getText, parseCommand, unwrap } from './messages.js';
 import { fetchLinkMedia, findLink } from './sources/index.js';
 import { convertToSticker } from './sticker.js';
@@ -42,16 +42,15 @@ export function helpText(config) {
   return [
     '🤖 *Bot de Stickers*',
     '',
-    'Mándame cualquiera de estas cosas y te devuelvo el sticker:',
-    '• 📷 Una foto',
-    `• 🎥 Un video o GIF (se usan los primeros ${config.maxVideoSeconds} s)`,
-    '• 🐦 Un enlace de X / Twitter',
-    '• 📌 Un enlace de Pinterest (pinterest.com/pin/… o pin.it/…)',
+    '*Cómo pedir un sticker*',
+    '• Manda una foto, video o GIF con *.sticker* en el texto',
+    '• Responde *.sticker* a una foto, video, GIF o enlace',
+    '• *.sticker* + un enlace de X / Twitter o Pinterest',
     '',
     '*Opciones*',
-    '• Escribe *recortar* en el pie de foto o junto al enlace para que el sticker llene todo el cuadrado (sin bordes transparentes).',
-    '• Responde a una foto, video o enlace con *!s* para convertirlo.',
-    '• *!id* muestra el ID de este chat (para configurar grupos).',
+    `• De los videos se usan los primeros ${config.maxVideoSeconds} s.`,
+    '• *.sticker recortar* → llena todo el cuadrado (sin bordes transparentes).',
+    '• *.id* muestra el ID de este chat.',
   ].join('\n');
 }
 
@@ -102,6 +101,7 @@ export function createHandler(deps) {
   const sentByBot = new RecentSet();
   const warnedChats = new RecentSet(200);
   const warnedStubs = new RecentSet(200);
+  const publicLimiter = createRateLimiter(config.publicRateLimit ?? 5, 60_000);
   const note = (text) => {
     if (config.logMessages !== false) log.log(`[bot] ${text}`);
   };
@@ -242,27 +242,53 @@ export function createHandler(deps) {
       return;
     }
 
-    if (!access.allowed) {
+    // Automático (sin comando): tu chat "Mensaje para ti", ALLOWED_NUMBERS y ALLOWED_GROUPS.
+    // Con comando (.sticker / .ayuda): tú en cualquier chat y, si PUBLIC_COMMANDS=true, cualquiera.
+    let allowed = access.allowed;
+    let isPublic = false;
+    if (!allowed && (command === 'sticker' || command === 'help') && isRegularChat(chat)) {
+      if (msg.key.fromMe) {
+        allowed = true;
+      } else if (config.publicCommands) {
+        allowed = true;
+        isPublic = true;
+      }
+    }
+
+    if (!allowed) {
       if (what && !warnedChats.has(chat)) {
         warnedChats.add(chat);
+        const tip = config.publicCommands ? ' (igual puede pedir stickers escribiendo .sticker)' : '';
         if (isJidGroup(chat)) {
-          note(`Ignoré ${what} en el grupo ${chat}: no está en ALLOWED_GROUPS (escribe !id ahí para ver su ID).`);
+          note(`Ignoré ${what} en el grupo ${chat}: no está en ALLOWED_GROUPS${tip}.`);
         } else if (msg.key.fromMe) {
-          note(`Ignoré ${what} que mandaste a otro chat (${chat}). Para stickers usa tu chat "Mensaje para ti".`);
+          note(`Ignoré ${what} que mandaste a otro chat (${chat}). Para stickers usa "Mensaje para ti" o escribe .sticker.`);
         } else {
           log.log(
             `[bot] Ignoré un mensaje de ${access.phone || chat}. ` +
-              'Si quieres que el bot le responda, agrégalo a ALLOWED_NUMBERS (o el grupo a ALLOWED_GROUPS).',
+              `Si quieres que el bot le responda siempre, agrégalo a ALLOWED_NUMBERS${tip}.`,
           );
         }
       }
       return;
     }
 
+    if (isPublic && command === 'sticker') {
+      const who = access.phone || (await senderPhone(msg.key, sock)) || msg.key.participant || chat;
+      const verdict = publicLimiter.take(who);
+      if (verdict !== 'ok') {
+        note(`⏳ ${who} pidió demasiados stickers seguidos; lo ignoro por un minuto.`);
+        if (verdict === 'limited-first') {
+          await send(chat, { text: '⏳ Vas muy rápido. Espera un minuto y vuelve a intentarlo 🙏' }, msg).catch(() => {});
+        }
+        return;
+      }
+    }
+
     if (what) {
       const where = isSelfChat(chat, sock.user)
         ? 'en tu chat "Mensaje para ti"'
-        : isJidGroup(chat) ? `en el grupo ${chat}` : `de ${access.phone || chat}`;
+        : isJidGroup(chat) ? `en el grupo ${chat}` : msg.key.fromMe ? `tuyo en ${chat}` : `de ${access.phone || chat}`;
       note(`📩 Recibí ${what} ${where}.`);
     }
 
@@ -274,7 +300,7 @@ export function createHandler(deps) {
     const target = resolveTarget(msg, content, text, command);
     if (!target) {
       if (command === 'sticker') {
-        await send(chat, { text: 'Responde con *!s* a una foto, video o enlace (o mándamelo directo).' }, msg);
+        await send(chat, { text: 'Responde *.sticker* a una foto, video o enlace, o mándalos con *.sticker* en el texto.' }, msg);
       }
       return;
     }

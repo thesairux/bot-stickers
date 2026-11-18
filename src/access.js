@@ -76,7 +76,7 @@ export async function senderPhone(key, sock) {
  */
 export async function checkAccess(msg, sock, config) {
   const chat = msg.key?.remoteJid;
-  if (!chat || chat === 'status@broadcast' || chat.endsWith('@newsletter') || chat.endsWith('@broadcast')) {
+  if (!isRegularChat(chat)) {
     return { allowed: false };
   }
 
@@ -91,6 +91,14 @@ export async function checkAccess(msg, sock, config) {
   const phone = await senderPhone(msg.key, sock);
   if (config.allowEveryone) return { allowed: true, phone };
   return { allowed: isAllowedNumber(phone, config), phone };
+}
+
+/**
+ * ¿Es un chat normal (privado o grupo)? Excluye estados, listas de difusión y canales.
+ * @param {string | null | undefined} chat
+ */
+export function isRegularChat(chat) {
+  return Boolean(chat) && chat !== 'status@broadcast' && !chat.endsWith('@broadcast') && !chat.endsWith('@newsletter');
 }
 
 /**

@@ -109,13 +109,26 @@ Después de cambiar `.env`, reinicia el bot.
 
 ## Comandos
 
+Hay dos formas de pedir stickers:
+
+- **Automático** (sin escribir nada): en tu chat "Mensaje para ti", con los números de
+  `ALLOWED_NUMBERS` y en los grupos de `ALLOWED_GROUPS`, toda foto, video o enlace se
+  convierte solo.
+- **Con `.sticker`** (para cualquiera, en privado o en grupos, si `PUBLIC_COMMANDS=true`):
+
 | Comando                 | Qué hace                                                        |
 | ----------------------- | --------------------------------------------------------------- |
-| *(mandar foto/video/enlace)* | Lo convierte en sticker automáticamente                    |
-| `recortar` en el texto  | Sticker recortado al cuadrado (sin bordes transparentes)        |
-| `!s` respondiendo a un mensaje | Convierte la foto, video o enlace del mensaje citado     |
-| `!ayuda`                | Muestra la ayuda                                                |
-| `!id`                   | Muestra el ID del chat (para configurar grupos)                 |
+| Foto/video con `.sticker` en el texto | Lo convierte en sticker                           |
+| Responder `.sticker` a un mensaje | Convierte la foto, video, GIF o enlace del mensaje citado |
+| `.sticker <enlace>`     | Convierte el enlace de X o Pinterest                            |
+| `.sticker recortar`     | Sticker recortado al cuadrado (sin bordes transparentes)        |
+| `.ayuda`                | Muestra la ayuda                                                |
+| `.id`                   | Muestra el ID del chat (para configurar grupos)                 |
+
+También sirven con `!` o `/` (`!sticker`, `/s`…) y la forma corta `.s`. Tú puedes usar
+`.sticker` en cualquier chat (por ejemplo, respondiendo a una foto que te mandó un amigo).
+Para evitar abusos, cada persona que no está en tus listas puede pedir como máximo
+`PUBLIC_RATE_LIMIT` stickers por minuto.
 
 Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ (y te dice por qué).
 
@@ -128,7 +141,10 @@ Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ 
 | `RESPOND_IN_SELF_CHAT`     | `true`          | Responder en tu chat "Mensaje para ti" |
 | `ALLOWED_NUMBERS`          | *(vacío)*       | Números que pueden usar el bot por privado |
 | `ALLOWED_GROUPS`           | *(vacío)*       | IDs de grupos donde funciona |
-| `ALLOW_EVERYONE`           | `false`         | Responder a cualquier chat privado |
+| `ALLOW_EVERYONE`           | `false`         | Convertir todo lo que llegue a cualquier chat privado, sin comando |
+| `PUBLIC_COMMANDS`          | `true`          | Cualquiera puede pedir stickers con `.sticker` (privado o grupos) |
+| `PUBLIC_RATE_LIMIT`        | `5`             | Máximo de `.sticker` por minuto por persona (fuera de tus listas) |
+| `LOG_MESSAGES`             | `true`          | Mostrar en la consola qué recibe el bot y qué hace |
 | `PAIRING_NUMBER`           | *(vacío)*       | Vincular con código en vez de QR |
 | `PROFILE_PICTURE`          | `assets/profile.jpg` | Foto de perfil del bot (vacío = no cambiarla) |
 | `PROFILE_STATUS`           | `stickers :D made by triton` | Descripción ("Info") del bot, máx. 139 caracteres (vacío = no cambiarla) |
