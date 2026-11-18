@@ -485,3 +485,34 @@ test('config: el paquete y el autor por defecto son "tritonitis"', () => {
   assert.equal(c.packName, 'tritonitis');
   assert.equal(c.author, 'tritonitis');
 });
+
+test('tú: responder ".sticker" a un enlace de X (con vista previa) en el chat con un amigo', async () => {
+  const t = setup({ ALLOW_EVERYONE: 'true' });
+  const friend = '56987654321@s.whatsapp.net';
+  const linkMessage = {
+    extendedTextMessage: {
+      text: 'https://x.com/profetarchive/status/1858000000000000000?s=46&t=AbCdEf',
+      matchedText: 'https://x.com/profetarchive/status/1858000000000000000?s=46&t=AbCdEf',
+      title: 'eden ✶ (@profetarchive) en X',
+      description: 'crawling back to you',
+      previewType: 1,
+    },
+  };
+  // Mandar el enlace tú a un amigo: no hace nada (a propósito)
+  await t.handle(msg({ chat: friend, fromMe: true, message: linkMessage }));
+  assert.equal(t.stickers().length, 0);
+
+  // Responder ".sticker" a ese mensaje: hace el sticker ahí mismo
+  await t.handle(msg({
+    chat: friend, fromMe: true,
+    message: { extendedTextMessage: { text: '.sticker', contextInfo: { stanzaId: 'L1', quotedMessage: linkMessage } } },
+  }));
+  assert.equal(t.calls.fetchLink[0].link.platform, 'twitter');
+  assert.equal(t.calls.fetchLink[0].link.id, '1858000000000000000');
+  assert.ok(t.stickers().length > 0);
+  assert.equal(t.stickers()[0].jid, friend);
+
+  // Y si Jas le manda ese mismo enlace al número del bot, sale solo
+  await t.handle(msg({ chat: friend, fromMe: false, message: linkMessage }));
+  assert.equal(t.calls.fetchLink.length, 2);
+});
