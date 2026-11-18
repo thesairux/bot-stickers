@@ -44,8 +44,8 @@ export function onlyDigits(value) {
  */
 export function loadConfig(env = process.env) {
   return {
-    packName: env.STICKER_PACK_NAME || 'Bot Stickers',
-    author: env.STICKER_AUTHOR || 'bot-stickers',
+    packName: env.STICKER_PACK_NAME || 'tritonitis',
+    author: env.STICKER_AUTHOR || 'tritonitis',
 
     // Quién puede usar el bot
     allowedNumbers: parseList(env.ALLOWED_NUMBERS).map(onlyDigits).filter(Boolean),

@@ -139,8 +139,8 @@ Mientras trabaja reacciona con ⏳, al terminar con ✅ y si algo falla con ❌ 
 
 | Variable                   | Por defecto     | Descripción |
 | -------------------------- | --------------- | ----------- |
-| `STICKER_PACK_NAME`        | `Bot Stickers`  | Nombre del paquete que se ve al tocar el sticker |
-| `STICKER_AUTHOR`           | `bot-stickers`  | Autor del sticker |
+| `STICKER_PACK_NAME`        | `tritonitis`    | Nombre del paquete que se ve al tocar el sticker |
+| `STICKER_AUTHOR`           | `tritonitis`    | Autor del sticker |
 | `RESPOND_IN_SELF_CHAT`     | `true`          | Responder en tu chat "Mensaje para ti" |
 | `ALLOWED_NUMBERS`          | *(vacío)*       | Números que pueden usar el bot por privado |
 | `ALLOWED_GROUPS`           | *(vacío)*       | IDs de grupos donde funciona |

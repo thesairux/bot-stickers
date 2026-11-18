@@ -112,8 +112,8 @@ export async function convertToSticker(input, options) {
     animated,
     ext = animated ? 'mp4' : 'png',
     fit = 'contain',
-    packName = 'Bot Stickers',
-    author = 'bot-stickers',
+    packName = 'tritonitis',
+    author = 'tritonitis',
     maxVideoSeconds = 8,
   } = options;
 

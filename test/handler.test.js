@@ -479,3 +479,9 @@ test('por defecto no hay límite de stickers por persona', async () => {
   assert.equal(t.stickers().length, 15);
   assert.equal(t.texts().filter((x) => x.includes('Vas muy rápido')).length, 0);
 });
+
+test('config: el paquete y el autor por defecto son "tritonitis"', () => {
+  const c = loadConfig({});
+  assert.equal(c.packName, 'tritonitis');
+  assert.equal(c.author, 'tritonitis');
+});

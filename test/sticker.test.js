@@ -101,3 +101,12 @@ test('archivo que no es imagen da un error claro', async () => {
     /ffmpeg falló/,
   );
 });
+
+test('por defecto el paquete y el autor dicen "tritonitis"', async () => {
+  const png = join(dir, 'default-meta.png');
+  await ffmpeg('-f', 'lavfi', '-i', 'color=c=green:s=200x200', '-frames:v', '1', png);
+  const img = await load(await convertToSticker({ path: png }, { animated: false }));
+  const exif = img.exif.toString('utf8');
+  assert.ok(exif.includes('"sticker-pack-name":"tritonitis"'));
+  assert.ok(exif.includes('"sticker-pack-publisher":"tritonitis"'));
+});
